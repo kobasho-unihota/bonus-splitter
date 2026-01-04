@@ -10,24 +10,23 @@ type SplitResult = {
   loan: number;
   remaining: number;
 
-  householdTotal: number; // 家計貯金(80%)
+  householdTotal: number; // 家計貯金(80%相当、端数調整込み)
   suki: number;           // すきちょ(20%)
   toku: number;           // 特ちょ(30%)
   gachi: number;          // ガチちょ(残り)
 
-  personalTotal: number;  // 個人枠(20%)
-  shogoPocket: number;
-  kanaPocket: number;
+  personalTotal: number;  // 個人枠(20%相当、偶数に調整済み)
+  shogoPocket: number;    // 夫婦で必ず同額
+  kanaPocket: number;     // 夫婦で必ず同額
 };
 
 type Season = "winter" | "summer";
 
 export default function Page() {
-  // 入力（URL初期化される）
   const [shogoBonus, setShogoBonus] = useState<string>("");
   const [kanaBonus, setKanaBonus] = useState<string>("");
 
-  // ローン初期値（URLがなければこの値）
+  // 初期値（URLがあればそちらが優先）
   const [loan, setLoan] = useState<string>("259,436");
 
   // 表示用：年と季節
@@ -66,11 +65,10 @@ export default function Page() {
     }
   }, []);
 
-  // ---- state → URL 反映（共有しやすい） ----
+  // ---- state → URL 反映（共有用） ----
   useEffect(() => {
     const url = new URL(window.location.href);
 
-    // 数値は URLには「素の数字」で入れる（カンマ無し）
     const s = toNumber(shogoBonus);
     const k = toNumber(kanaBonus);
     const l = toNumber(loan);
@@ -85,7 +83,6 @@ export default function Page() {
 
     url.searchParams.set("season", season);
 
-    // 履歴は増やさず、URLだけ差し替え
     window.history.replaceState(null, "", url);
   }, [shogoBonus, kanaBonus, loan, year, season]);
 
@@ -112,7 +109,7 @@ export default function Page() {
   const result: SplitResult | null = useMemo(() => {
     if (error) return null;
     if (nShogo == null || nKana == null || nLoan == null) return null;
-    return calcSplit(nShogo, nKana, nLoan);
+    return calcSplitEvenPersonal(nShogo, nKana, nLoan);
   }, [nShogo, nKana, nLoan, error]);
 
   const heading = useMemo(() => {
@@ -148,12 +145,9 @@ export default function Page() {
     <main style={{ padding: 20 }}>
       <div style={{ maxWidth: 560, margin: "0 auto" }}>
         <header style={{ marginBottom: 14 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 4px" }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>
             ボーナス分配（家計貯金 / 個人枠）
           </h1>
-          <p style={{ fontSize: 12, color: "var(--muted)", margin: 0, lineHeight: 1.4 }}>
-            URLで初期化できます（例：<code>?shogo=1042272&amp;kana=388768&amp;loan=259436&amp;year=2025&amp;season=winter</code>）
-          </p>
         </header>
 
         <section
@@ -253,7 +247,7 @@ export default function Page() {
               フォーマットをコピー
             </button>
             <span style={{ fontSize: 12, color: "var(--muted)" }}>
-              入力内容はURLにも反映されます（共有用）
+              URLに入力が反映されます
             </span>
           </div>
 
@@ -279,20 +273,31 @@ export default function Page() {
   );
 }
 
-/** 「floor + 余りは最後に寄せる」でズレを防ぐ */
-function calcSplit(shogoBonus: number, kanaBonus: number, loan: number): SplitResult {
+/**
+ * 個人枠が奇数円になった場合の「1円差」をなくす：
+ * - まず「理論上の個人枠(20%)」を計算
+ * - 夫婦で必ず同額にできるよう、個人枠を偶数円に丸める（1円だけ家計へ寄せる）
+ * - 残りを家計枠として再計算（合計は必ず一致）
+ */
+function calcSplitEvenPersonal(shogoBonus: number, kanaBonus: number, loan: number): SplitResult {
   const totalBonus = shogoBonus + kanaBonus;
   const remaining = totalBonus - loan;
 
-  const householdTotal = Math.floor(remaining * 0.8);
-  const personalTotal = remaining - householdTotal;
+  // 理論上の個人枠（20%）
+  const personalIdeal = Math.floor(remaining * 0.2);
+
+  // 偶数円に調整（奇数なら1円を家計側に寄せる）
+  const personalTotal = personalIdeal % 2 === 0 ? personalIdeal : personalIdeal - 1;
+
+  // 家計は残り（端数調整込み）
+  const householdTotal = remaining - personalTotal;
 
   const suki = Math.floor(householdTotal * 0.2);
   const toku = Math.floor(householdTotal * 0.3);
   const gachi = householdTotal - suki - toku;
 
-  const shogoPocket = Math.floor(personalTotal / 2);
-  const kanaPocket = personalTotal - shogoPocket;
+  // 必ず同額
+  const each = personalTotal / 2;
 
   return {
     shogoBonus,
@@ -305,9 +310,30 @@ function calcSplit(shogoBonus: number, kanaBonus: number, loan: number): SplitRe
     toku,
     gachi,
     personalTotal,
-    shogoPocket,
-    kanaPocket,
+    shogoPocket: each,
+    kanaPocket: each,
   };
+}
+
+// URL の query 更新ヘルパー（null は削除）
+function setOrDelete(url: URL, key: string, value: number | null) {
+  if (value == null) url.searchParams.delete(key);
+  else url.searchParams.set(key, String(Math.trunc(value)));
+}
+
+function normalizeSeason(s: string): Season | null {
+  const t = s.trim().toLowerCase();
+  if (t === "winter" || t === "w" || t === "冬") return "winter";
+  if (t === "summer" || t === "s" || t === "夏") return "summer";
+  return null;
+}
+
+function normalizeYear(s: string): number | null {
+  const n = toNumber(s);
+  if (n == null) return null;
+  const y = Math.trunc(n);
+  if (y < 2000 || y > 2100) return null;
+  return y;
 }
 
 function Field({
@@ -441,30 +467,7 @@ function KV({ label, value, big }: { label: string; value: string; big?: boolean
   );
 }
 
-// URL の query 更新ヘルパー（null は削除）
-function setOrDelete(url: URL, key: string, value: number | null) {
-  if (value == null) url.searchParams.delete(key);
-  else url.searchParams.set(key, String(Math.trunc(value)));
-}
-
-// season 正規化
-function normalizeSeason(s: string): Season | null {
-  const t = s.trim().toLowerCase();
-  if (t === "winter" || t === "w" || t === "冬") return "winter";
-  if (t === "summer" || t === "s" || t === "夏") return "summer";
-  return null;
-}
-
-// year 正規化（4桁の西暦のみ許可）
-function normalizeYear(s: string): number | null {
-  const n = toNumber(s);
-  if (n == null) return null;
-  const y = Math.trunc(n);
-  if (y < 2000 || y > 2100) return null;
-  return y;
-}
-
-// カンマ/全角/円 を許容（クエリでも入力欄でも使える）
+// カンマ/全角/円 を許容
 function toNumber(s: string): number | null {
   if (!s) return null;
   let t = s.trim();

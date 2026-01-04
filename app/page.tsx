@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type SplitResult = {
   shogoBonus: number;
@@ -20,13 +20,74 @@ type SplitResult = {
   kanaPocket: number;
 };
 
+type Season = "winter" | "summer";
+
 export default function Page() {
-  // それぞれ入力
+  // 入力（URL初期化される）
   const [shogoBonus, setShogoBonus] = useState<string>("");
   const [kanaBonus, setKanaBonus] = useState<string>("");
 
-  // 初期値入り（必要に応じて変更OK）
+  // ローン初期値（URLがなければこの値）
   const [loan, setLoan] = useState<string>("259,436");
+
+  // 表示用：年と季節
+  const [year, setYear] = useState<string>(String(new Date().getFullYear()));
+  const [season, setSeason] = useState<Season>("winter");
+
+  // ---- URL → state 初期化（初回のみ） ----
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+
+    const qShogo = p.get("shogo");
+    const qKana = p.get("kana");
+    const qLoan = p.get("loan");
+    const qYear = p.get("year");
+    const qSeason = p.get("season");
+
+    if (qShogo != null) {
+      const n = toNumber(qShogo);
+      if (n != null) setShogoBonus(n.toLocaleString("ja-JP"));
+    }
+    if (qKana != null) {
+      const n = toNumber(qKana);
+      if (n != null) setKanaBonus(n.toLocaleString("ja-JP"));
+    }
+    if (qLoan != null) {
+      const n = toNumber(qLoan);
+      if (n != null) setLoan(n.toLocaleString("ja-JP"));
+    }
+    if (qYear != null) {
+      const y = normalizeYear(qYear);
+      if (y) setYear(String(y));
+    }
+    if (qSeason != null) {
+      const s = normalizeSeason(qSeason);
+      if (s) setSeason(s);
+    }
+  }, []);
+
+  // ---- state → URL 反映（共有しやすい） ----
+  useEffect(() => {
+    const url = new URL(window.location.href);
+
+    // 数値は URLには「素の数字」で入れる（カンマ無し）
+    const s = toNumber(shogoBonus);
+    const k = toNumber(kanaBonus);
+    const l = toNumber(loan);
+    const y = normalizeYear(year);
+
+    setOrDelete(url, "shogo", s);
+    setOrDelete(url, "kana", k);
+    setOrDelete(url, "loan", l);
+
+    if (y) url.searchParams.set("year", String(y));
+    else url.searchParams.delete("year");
+
+    url.searchParams.set("season", season);
+
+    // 履歴は増やさず、URLだけ差し替え
+    window.history.replaceState(null, "", url);
+  }, [shogoBonus, kanaBonus, loan, year, season]);
 
   const nShogo = toNumber(shogoBonus);
   const nKana = toNumber(kanaBonus);
@@ -54,11 +115,16 @@ export default function Page() {
     return calcSplit(nShogo, nKana, nLoan);
   }, [nShogo, nKana, nLoan, error]);
 
+  const heading = useMemo(() => {
+    const label = season === "winter" ? "冬" : "夏";
+    const y = normalizeYear(year);
+    return y ? `${y}年 ${label}のボーナス` : `${label}のボーナス`;
+  }, [year, season]);
+
   const outText = useMemo(() => {
     if (!result) return "";
-
     return (
-`【ボーナス分配】
+`【${heading}】
 
 ▶ 総支給額：${yen(result.totalBonus)}
 ・しょうご：${yen(result.shogoBonus)}
@@ -76,7 +142,7 @@ export default function Page() {
 ・かな　　：${yen(result.kanaPocket)}
 `
     );
-  }, [result]);
+  }, [result, heading]);
 
   return (
     <main style={{ padding: 20 }}>
@@ -86,7 +152,7 @@ export default function Page() {
             ボーナス分配（家計貯金 / 個人枠）
           </h1>
           <p style={{ fontSize: 12, color: "var(--muted)", margin: 0, lineHeight: 1.4 }}>
-            しょうご・かなのボーナスを入力 → 合計を自動計算。数字はカンマ入力OK（自動整形）。
+            URLで初期化できます（例：<code>?shogo=1042272&amp;kana=388768&amp;loan=259436&amp;year=2025&amp;season=winter</code>）
           </p>
         </header>
 
@@ -99,6 +165,33 @@ export default function Page() {
             padding: 14,
           }}
         >
+          {/* 年 / 季節 */}
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
+            <div style={{ flex: 1 }}>
+              <MiniField label="年" value={year} onChange={setYear} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>
+                季節
+              </label>
+              <select
+                value={season}
+                onChange={(e) => setSeason(e.target.value as Season)}
+                style={{
+                  width: "100%",
+                  padding: 12,
+                  fontSize: 16,
+                  borderRadius: 12,
+                  border: "1px solid var(--line)",
+                  background: "#fff",
+                }}
+              >
+                <option value="winter">冬</option>
+                <option value="summer">夏</option>
+              </select>
+            </div>
+          </div>
+
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <Field label="しょうご ボーナス" value={shogoBonus} onChange={setShogoBonus} />
             <Field label="かな ボーナス" value={kanaBonus} onChange={setKanaBonus} />
@@ -132,19 +225,15 @@ export default function Page() {
             }}
           >
             <KV label="支出：住宅ローンボーナス払い" value={result ? yen(result.loan) : "—"} big />
-
             <div style={{ height: 10 }} />
-
             <KV label="家計貯金（80%）" value={result ? yen(result.householdTotal) : "—"} />
             <KV label="・すきちょ" value={result ? yen(result.suki) : "—"} />
-            <KV label="・特ちょ" value={result ? yen(result.toku) : "—"} />
+            <KV label="・特ちょ　" value={result ? yen(result.toku) : "—"} />
             <KV label="・ガチちょ" value={result ? yen(result.gachi) : "—"} />
-
             <div style={{ height: 10 }} />
-
             <KV label="個人枠（20%）" value={result ? yen(result.personalTotal) : "—"} />
             <KV label="・しょうご" value={result ? yen(result.shogoPocket) : "—"} />
-            <KV label="・かな" value={result ? yen(result.kanaPocket) : "—"} />
+            <KV label="・かな　　" value={result ? yen(result.kanaPocket) : "—"} />
           </div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 14 }}>
@@ -164,7 +253,7 @@ export default function Page() {
               フォーマットをコピー
             </button>
             <span style={{ fontSize: 12, color: "var(--muted)" }}>
-              LINEにそのまま貼れます
+              入力内容はURLにも反映されます（共有用）
             </span>
           </div>
 
@@ -174,7 +263,7 @@ export default function Page() {
             style={{
               width: "100%",
               marginTop: 12,
-              minHeight: 180,
+              minHeight: 190,
               padding: 12,
               borderRadius: 14,
               border: "1px solid var(--line)",
@@ -264,6 +353,37 @@ function Field({
   );
 }
 
+function MiniField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <>
+      <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>
+        {label}
+      </label>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        inputMode="numeric"
+        style={{
+          width: "100%",
+          padding: 12,
+          fontSize: 16,
+          borderRadius: 12,
+          border: "1px solid var(--line)",
+          background: "#fff",
+        }}
+      />
+    </>
+  );
+}
+
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
     <div
@@ -321,7 +441,30 @@ function KV({ label, value, big }: { label: string; value: string; big?: boolean
   );
 }
 
-// カンマ/全角/円 の入力を許容
+// URL の query 更新ヘルパー（null は削除）
+function setOrDelete(url: URL, key: string, value: number | null) {
+  if (value == null) url.searchParams.delete(key);
+  else url.searchParams.set(key, String(Math.trunc(value)));
+}
+
+// season 正規化
+function normalizeSeason(s: string): Season | null {
+  const t = s.trim().toLowerCase();
+  if (t === "winter" || t === "w" || t === "冬") return "winter";
+  if (t === "summer" || t === "s" || t === "夏") return "summer";
+  return null;
+}
+
+// year 正規化（4桁の西暦のみ許可）
+function normalizeYear(s: string): number | null {
+  const n = toNumber(s);
+  if (n == null) return null;
+  const y = Math.trunc(n);
+  if (y < 2000 || y > 2100) return null;
+  return y;
+}
+
+// カンマ/全角/円 を許容（クエリでも入力欄でも使える）
 function toNumber(s: string): number | null {
   if (!s) return null;
   let t = s.trim();

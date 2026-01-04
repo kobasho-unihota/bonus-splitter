@@ -2,8 +2,6 @@
 
 import { useMemo, useState } from "react";
 
-type Person = "shogo" | "kana";
-
 type SplitResult = {
   shogoBonus: number;
   kanaBonus: number;
@@ -23,38 +21,30 @@ type SplitResult = {
 };
 
 export default function Page() {
-  // それぞれ入力する形式
+  // それぞれ入力
   const [shogoBonus, setShogoBonus] = useState<string>("");
   const [kanaBonus, setKanaBonus] = useState<string>("");
 
-  // ローンは初期値を入れておく（必要に応じて変更OK）
+  // 初期値入り（必要に応じて変更OK）
   const [loan, setLoan] = useState<string>("259,436");
-
-  // 表示（コピー文の見出し用途）
-  const [person, setPerson] = useState<Person>("shogo");
 
   const nShogo = toNumber(shogoBonus);
   const nKana = toNumber(kanaBonus);
   const nLoan = toNumber(loan);
 
   const nTotal = useMemo(() => {
-    if (nShogo == null && nKana == null) return null;
     if (nShogo == null || nKana == null) return null;
     return nShogo + nKana;
   }, [nShogo, nKana]);
 
   const error = useMemo(() => {
-    // 何も入力してない間はエラー出さない
-    if ((nShogo == null && nKana == null) && (nLoan == null || loan.trim() === "")) return "";
-
+    if (nShogo == null && nKana == null && (nLoan == null || loan.trim() === "")) return "";
     if (nShogo == null) return "しょうごのボーナスを入力してください。";
     if (nKana == null) return "かなのボーナスを入力してください。";
     if (nLoan == null) return "住宅ローン（ボーナス払い）を入力してください。";
-
     if (nShogo < 0 || nKana < 0 || nLoan < 0) return "金額は0以上で入力してください。";
     if (nTotal == null) return "ボーナス合計の計算に失敗しました。";
     if (nLoan > nTotal) return "ローンのボーナス払いが、ボーナス合計を超えています。";
-
     return "";
   }, [nShogo, nKana, nLoan, nTotal, loan]);
 
@@ -66,10 +56,9 @@ export default function Page() {
 
   const outText = useMemo(() => {
     if (!result) return "";
-    const title = person === "shogo" ? "しょうご" : "かな";
 
     return (
-`【ボーナス分配（${title}）】
+`【ボーナス分配】
 
 ▶ 総支給額：${yen(result.totalBonus)}
 ・しょうご：${yen(result.shogoBonus)}
@@ -87,7 +76,7 @@ export default function Page() {
 ・かな　　：${yen(result.kanaPocket)}
 `
     );
-  }, [result, person]);
+  }, [result]);
 
   return (
     <main style={{ padding: 20 }}>
@@ -110,26 +99,6 @@ export default function Page() {
             padding: 14,
           }}
         >
-          {/* セグメント（コピー文の見出し切替用） */}
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              padding: 6,
-              borderRadius: "var(--radius-s)",
-              background: "var(--soft)",
-              border: "1px solid var(--line)",
-              marginBottom: 14,
-            }}
-          >
-            <SegButton active={person === "shogo"} onClick={() => setPerson("shogo")}>
-              しょうご
-            </SegButton>
-            <SegButton active={person === "kana"} onClick={() => setPerson("kana")}>
-              かな
-            </SegButton>
-          </div>
-
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <Field label="しょうご ボーナス" value={shogoBonus} onChange={setShogoBonus} />
             <Field label="かな ボーナス" value={kanaBonus} onChange={setKanaBonus} />
@@ -233,7 +202,6 @@ function calcSplit(shogoBonus: number, kanaBonus: number, loan: number): SplitRe
   const toku = Math.floor(householdTotal * 0.3);
   const gachi = householdTotal - suki - toku;
 
-  // 個人枠は等分、端数は後者に寄せる
   const shogoPocket = Math.floor(personalTotal / 2);
   const kanaPocket = personalTotal - shogoPocket;
 
@@ -251,34 +219,6 @@ function calcSplit(shogoBonus: number, kanaBonus: number, loan: number): SplitRe
     shogoPocket,
     kanaPocket,
   };
-}
-
-function SegButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        flex: 1,
-        padding: "10px 0",
-        borderRadius: 12,
-        border: active ? "1px solid var(--line)" : "1px solid transparent",
-        background: active ? "#fff" : "transparent",
-        color: active ? "var(--text)" : "var(--muted)",
-        fontWeight: 600,
-        cursor: "pointer",
-      }}
-    >
-      {children}
-    </button>
-  );
 }
 
 function Field({

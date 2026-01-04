@@ -1,36 +1,27 @@
-@import "tailwindcss";
+:root{
+  --bg:#f6f5f2;
+  --card:#ffffff;
+  --text:#2e2e2e;
+  --muted:#7a7a7a;
+  --line:#e4e2dd;
+  --soft:#f1f0eb;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  --accent:#7fa99b;       /* くすみグリーン */
+  --accent-soft:#e7f0ed;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --radius:18px;
+  --radius-s:14px;
+  --shadow:0 6px 16px rgba(0,0,0,.06);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+*{ box-sizing:border-box; }
+
+html, body{
+  padding:0;
+  margin:0;
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  background:var(--bg);
+  color:var(--text);
 }
 
-/* number入力のスピナーを消す */
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-input[type="number"] {
-  -moz-appearance: textfield;
-}
+a{ color:inherit; text-decoration:none; }

@@ -35,6 +35,8 @@ export default function Page() {
 
   // ---- URL → state 初期化（初回のみ） ----
   useEffect(() => {
+    // URLはブラウザでのみ読めるため、マウント後に一度だけフォームへ反映する。
+    /* eslint-disable react-hooks/set-state-in-effect */
     const p = new URLSearchParams(window.location.search);
 
     const qShogo = p.get("shogo");
@@ -63,6 +65,7 @@ export default function Page() {
       const s = normalizeSeason(qSeason);
       if (s) setSeason(s);
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
   // ---- state → URL 反映（共有用） ----
